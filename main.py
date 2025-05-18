@@ -1,6 +1,7 @@
 import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
 import networkx as nx
+from networkx.drawing.nx_agraph import graphviz_layout
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import csv
@@ -17,8 +18,6 @@ class CPMApp:
         self.canvas = None  # do wykresu
 
         self.create_widgets()
-
-        self.enable_monokai_theme()
 
     def create_widgets(self):
         self.tree = ttk.Treeview(self.root, columns=("Name", "Start Event", "End Event", "Duration"), show='headings')
@@ -52,9 +51,9 @@ class CPMApp:
         tk.Button(entry_frame, text="Edit Activity", command=self.edit_activity).grid(row=1, column=5, padx=5)
         tk.Button(entry_frame, text="Update Activity", command=self.update_activity).grid(row=1, column=6, padx=5)
         tk.Button(entry_frame, text="Delete Activity", command=self.delete_activity).grid(row=1, column=7, padx=5)
-        tk.Button(entry_frame, text="Generate CPM", command=self.generate_cpm).grid(row=1, column=8, padx=5)
-        tk.Button(entry_frame, text="Save CSV", command=self.save_csv).grid(row=1, column=9, padx=5)
-        tk.Button(entry_frame, text="Load CSV", command=self.load_csv).grid(row=1, column=10, padx=5)
+        tk.Button(entry_frame, text="Generate CPM", command=self.generate_cpm).grid(row=3, column=4, padx=5)
+        tk.Button(entry_frame, text="Save CSV", command=self.save_csv).grid(row=2, column=4, padx=5)
+        tk.Button(entry_frame, text="Load CSV", command=self.load_csv).grid(row=2, column=5, padx=5)
 
     def add_activity(self):
         name = self.name_entry.get().strip()
@@ -180,6 +179,15 @@ class CPMApp:
                 if lft < latest_finish[node]:
                     latest_finish[node] = lft
 
+        # Slack (zapas czasu) = latest_finish - earliest_start
+        slack = {node: latest_finish[node] - earliest_start[node] for node in G.nodes}
+
+        # Przechowaj ES, LF i Slack w węzłach (atrybuty)
+        for node in G.nodes:
+            G.nodes[node]['ES'] = earliest_start[node]
+            G.nodes[node]['LF'] = latest_finish[node]
+            G.nodes[node]['Slack'] = slack[node]
+
         # Krytyczna ścieżka: czynności, których najwcześniejszy start = najpóźniejszy finish dla zdarzeń
         critical_edges = []
         for name, start, end, duration in self.activities:
@@ -193,10 +201,16 @@ class CPMApp:
     def show_graph(self, G, critical_edges):
         fig, ax = plt.subplots(figsize=(8,6))
 
-        pos = nx.spring_layout(G)
+        pos = graphviz_layout(G, prog="dot", args="-Grankdir=LR")
         node_colors = ['skyblue' for _ in G.nodes]
         nx.draw_networkx_nodes(G, pos, node_color=node_colors, node_size=700, ax=ax)
-        nx.draw_networkx_labels(G, pos, ax=ax)
+        # nx.draw_networkx_labels(G, pos, ax=ax)
+        # Tworzymy etykiety z ES, LF i Slack
+        node_labels = {
+            node: f"{node}\nES:{G.nodes[node]['ES']}    LF:{G.nodes[node]['LF']}\nSlack:{G.nodes[node]['Slack']}"
+            for node in G.nodes
+        }
+        nx.draw_networkx_labels(G, pos, labels=node_labels, font_size=8, ax=ax)
 
         # Krawędzie z podziałem na krytyczne i niekrytyczne
         edge_colors = []
@@ -204,10 +218,9 @@ class CPMApp:
             if (u,v) in critical_edges:
                 edge_colors.append('red')
             else:
-                edge_colors.append('gray')
+                edge_colors.append('gray');
 
         edge_labels = {(u, v): f"{G.edges[u, v]['name']} ({G.edges[u, v]['duration']})" for u, v in G.edges}
-
 
         nx.draw_networkx_edges(G, pos, edge_color=edge_colors, width=2, ax=ax)
         nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels, ax=ax)
@@ -218,6 +231,7 @@ class CPMApp:
         self.canvas = FigureCanvasTkAgg(fig, master=self.root)
         self.canvas.draw()
         self.canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
+
 
     def save_csv(self):
         filepath = filedialog.asksaveasfilename(defaultextension=".csv", filetypes=[("CSV files", "*.csv")])
@@ -239,7 +253,6 @@ class CPMApp:
             self.activities.clear()
             self.tree.delete(*self.tree.get_children())
             for row in reader:
-                print(row)
                 if len(row) != 4:
                     continue
                 try:
@@ -257,50 +270,6 @@ class CPMApp:
         self.start_entry.delete(0, tk.END)
         self.end_entry.delete(0, tk.END)
         self.duration_entry.delete(0, tk.END)
-
-    def enable_monokai_theme(self):
-        monokai_bg = "#272822"
-        monokai_entry = "#3E3D32"
-        monokai_fg = "#F8F8F2"
-        monokai_button_bg = "#75715E"
-        monokai_accent = "#66D9EF"
-        monokai_selected = "#49483E"
-
-        style = ttk.Style(self.root)
-        style.theme_use("default")
-
-        # Configure window background
-        self.root.configure(bg=monokai_bg)
-
-        # Treeview (table)
-        style.configure("Treeview",
-                        background=monokai_entry,
-                        fieldbackground=monokai_entry,
-                        foreground=monokai_fg,
-                        rowheight=25)
-        style.map("Treeview", background=[("selected", monokai_selected)])
-
-        # Buttons
-        style.configure("TButton",
-                        background=monokai_button_bg,
-                        foreground=monokai_fg,
-                        padding=6,
-                        borderwidth=1)
-        style.map("TButton",
-                  background=[("active", monokai_selected)])
-
-        # Frame & Labels
-        for widget in self.root.winfo_children():
-            if isinstance(widget, (tk.Frame, tk.LabelFrame)):
-                widget.configure(bg=monokai_bg)
-                for sub in widget.winfo_children():
-                    if isinstance(sub, tk.Label):
-                        sub.configure(bg=monokai_bg, fg=monokai_accent)
-                    elif isinstance(sub, tk.Entry):
-                        sub.configure(bg=monokai_entry, fg=monokai_fg, insertbackground=monokai_fg,
-                                      relief=tk.FLAT, highlightthickness=1, highlightbackground="#444")
-                    elif isinstance(sub, tk.Button):
-                        sub.configure(bg=monokai_button_bg, fg=monokai_fg, activebackground=monokai_selected)
 
 
 if __name__ == "__main__":
