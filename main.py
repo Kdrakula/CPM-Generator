@@ -8,17 +8,21 @@ import csv
 class CPMApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("CPM Diagram Generator (czynności i zdarzenia)")
+        self.root.title("CPM Diagram Generator")
 
         # Lista czynności: (start_event, end_event, duration)
         self.activities = []
         self.current_edit_index = None
+        self.activity_counter = 0  # A, B, C, ...
         self.canvas = None  # do wykresu
 
         self.create_widgets()
 
+        self.enable_monokai_theme()
+
     def create_widgets(self):
-        self.tree = ttk.Treeview(self.root, columns=("Start Event", "End Event", "Duration"), show='headings')
+        self.tree = ttk.Treeview(self.root, columns=("Name", "Start Event", "End Event", "Duration"), show='headings')
+        self.tree.heading("Name", text="Name")
         self.tree.heading("Start Event", text="Start Event")
         self.tree.heading("End Event", text="End Event")
         self.tree.heading("Duration", text="Duration")
@@ -27,28 +31,33 @@ class CPMApp:
         entry_frame = tk.Frame(self.root)
         entry_frame.pack(pady=5)
 
-        tk.Label(entry_frame, text="Start Event").grid(row=0, column=0)
-        tk.Label(entry_frame, text="End Event").grid(row=0, column=1)
-        tk.Label(entry_frame, text="Duration").grid(row=0, column=2)
+        tk.Label(entry_frame, text="Name").grid(row=0, column=0)
+        tk.Label(entry_frame, text="Start").grid(row=0, column=1)
+        tk.Label(entry_frame, text="End").grid(row=0, column=2)
+        tk.Label(entry_frame, text="Duration").grid(row=0, column=3)
+
+        self.name_entry = tk.Entry(entry_frame, width=10)
+        self.name_entry.grid(row=1, column=0)
 
         self.start_entry = tk.Entry(entry_frame, width=10)
-        self.start_entry.grid(row=1, column=0)
+        self.start_entry.grid(row=1, column=1)
 
         self.end_entry = tk.Entry(entry_frame, width=10)
-        self.end_entry.grid(row=1, column=1)
+        self.end_entry.grid(row=1, column=2)
 
         self.duration_entry = tk.Entry(entry_frame, width=10)
-        self.duration_entry.grid(row=1, column=2)
+        self.duration_entry.grid(row=1, column=3)
 
-        tk.Button(entry_frame, text="Add Activity", command=self.add_activity).grid(row=1, column=3, padx=5)
-        tk.Button(entry_frame, text="Edit Activity", command=self.edit_activity).grid(row=1, column=4, padx=5)
-        tk.Button(entry_frame, text="Update Activity", command=self.update_activity).grid(row=1, column=5, padx=5)
-        tk.Button(entry_frame, text="Delete Activity", command=self.delete_activity).grid(row=1, column=6, padx=5)
-        tk.Button(entry_frame, text="Generate CPM", command=self.generate_cpm).grid(row=1, column=7, padx=5)
-        tk.Button(entry_frame, text="Save CSV", command=self.save_csv).grid(row=1, column=8, padx=5)
-        tk.Button(entry_frame, text="Load CSV", command=self.load_csv).grid(row=1, column=9, padx=5)
+        tk.Button(entry_frame, text="Add Activity", command=self.add_activity).grid(row=1, column=4, padx=5)
+        tk.Button(entry_frame, text="Edit Activity", command=self.edit_activity).grid(row=1, column=5, padx=5)
+        tk.Button(entry_frame, text="Update Activity", command=self.update_activity).grid(row=1, column=6, padx=5)
+        tk.Button(entry_frame, text="Delete Activity", command=self.delete_activity).grid(row=1, column=7, padx=5)
+        tk.Button(entry_frame, text="Generate CPM", command=self.generate_cpm).grid(row=1, column=8, padx=5)
+        tk.Button(entry_frame, text="Save CSV", command=self.save_csv).grid(row=1, column=9, padx=5)
+        tk.Button(entry_frame, text="Load CSV", command=self.load_csv).grid(row=1, column=10, padx=5)
 
     def add_activity(self):
+        name = self.name_entry.get().strip()
         start = self.start_entry.get().strip()
         end = self.end_entry.get().strip()
         duration = self.duration_entry.get().strip()
@@ -56,6 +65,10 @@ class CPMApp:
         if not start.isdigit() or not end.isdigit() or not duration.isdigit():
             messagebox.showerror("Error", "Start event, end event and duration must be integers")
             return
+
+        if not name:
+            name = chr(ord('A') + self.activity_counter)
+            self.activity_counter += 1
 
         start = int(start)
         end = int(end)
@@ -65,8 +78,8 @@ class CPMApp:
             messagebox.showerror("Error", "End event must be greater than start event")
             return
 
-        self.activities.append((start, end, duration))
-        self.tree.insert('', 'end', values=(start, end, duration))
+        self.activities.append((name, start, end, duration))
+        self.tree.insert('', 'end', values=(name, start, end, duration))
         self.clear_entries()
 
     def edit_activity(self):
@@ -78,16 +91,18 @@ class CPMApp:
         item = selected[0]
         values = self.tree.item(item, 'values')
 
+        self.name_entry.delete(0, tk.END)
         self.start_entry.delete(0, tk.END)
         self.end_entry.delete(0, tk.END)
         self.duration_entry.delete(0, tk.END)
 
-        self.start_entry.insert(0, values[0])
-        self.end_entry.insert(0, values[1])
-        self.duration_entry.insert(0, values[2])
+        self.name_entry.insert(0, values[0])
+        self.start_entry.insert(0, values[1])
+        self.end_entry.insert(0, values[2])
+        self.duration_entry.insert(0, values[3])
 
         for i, act in enumerate(self.activities):
-            if act == (int(values[0]), int(values[1]), int(values[2])):
+            if act == (values[0], int(values[1]), int(values[2]), int(values[3])):
                 self.current_edit_index = i
                 break
 
@@ -96,6 +111,7 @@ class CPMApp:
             messagebox.showwarning("Warning", "No activity is currently being edited")
             return
 
+        name = self.name_entry.get().strip()
         start = self.start_entry.get().strip()
         end = self.end_entry.get().strip()
         duration = self.duration_entry.get().strip()
@@ -112,7 +128,7 @@ class CPMApp:
             messagebox.showerror("Error", "End event must be greater than start event")
             return
 
-        self.activities[self.current_edit_index] = (start, end, duration)
+        self.activities[self.current_edit_index] = (name, start, end, duration)
         self.current_edit_index = None
 
         self.tree.delete(*self.tree.get_children())
@@ -128,15 +144,17 @@ class CPMApp:
             return
         for item in selected:
             values = self.tree.item(item, 'values')
-            self.activities = [act for act in self.activities if act != (int(values[0]), int(values[1]), int(values[2]))]
+            self.activities = [act for act in self.activities if act != (values[0], int(values[1]), int(values[2]), int(values[3])) ]
             self.tree.delete(item)
 
     def generate_cpm(self):
         G = nx.DiGraph()
 
         # Wierzchołki - zdarzenia, krawędzie - czynności z wagą czas trwania
-        for start, end, duration in self.activities:
-            G.add_edge(start, end, duration=duration)
+        for name, start, end, duration in self.activities:
+            G.add_node(start)
+            G.add_node(end)
+            G.add_edge(start, end, name=name, duration=duration)
 
         try:
             topo_order = list(nx.topological_sort(G))
@@ -164,7 +182,7 @@ class CPMApp:
 
         # Krytyczna ścieżka: czynności, których najwcześniejszy start = najpóźniejszy finish dla zdarzeń
         critical_edges = []
-        for start, end, duration in self.activities:
+        for name, start, end, duration in self.activities:
             es = earliest_start[start]
             lf = latest_finish[end] - duration
             if es == lf:
@@ -188,7 +206,8 @@ class CPMApp:
             else:
                 edge_colors.append('gray')
 
-        edge_labels = {(u,v): G.edges[u,v]['duration'] for u,v in G.edges}
+        edge_labels = {(u, v): f"{G.edges[u, v]['name']} ({G.edges[u, v]['duration']})" for u, v in G.edges}
+
 
         nx.draw_networkx_edges(G, pos, edge_color=edge_colors, width=2, ax=ax)
         nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels, ax=ax)
@@ -206,7 +225,7 @@ class CPMApp:
             return
         with open(filepath, 'w', newline='') as f:
             writer = csv.writer(f)
-            writer.writerow(['Start Event', 'End Event', 'Duration'])
+            writer.writerow(['Name', 'Start Event', 'End Event', 'Duration'])
             for act in self.activities:
                 writer.writerow(act)
 
@@ -220,21 +239,69 @@ class CPMApp:
             self.activities.clear()
             self.tree.delete(*self.tree.get_children())
             for row in reader:
-                if len(row) != 3:
+                print(row)
+                if len(row) != 4:
                     continue
                 try:
-                    start = int(row[0])
-                    end = int(row[1])
-                    duration = int(row[2])
+                    name = row[0]
+                    start = int(row[1])
+                    end = int(row[2])
+                    duration = int(row[3])
                 except ValueError:
                     continue
-                self.activities.append((start, end, duration))
-                self.tree.insert('', 'end', values=(start, end, duration))
+                self.activities.append((name, start, end, duration))
+                self.tree.insert('', 'end', values=(name, start, end, duration))
 
     def clear_entries(self):
+        self.name_entry.delete(0, tk.END)
         self.start_entry.delete(0, tk.END)
         self.end_entry.delete(0, tk.END)
         self.duration_entry.delete(0, tk.END)
+
+    def enable_monokai_theme(self):
+        monokai_bg = "#272822"
+        monokai_entry = "#3E3D32"
+        monokai_fg = "#F8F8F2"
+        monokai_button_bg = "#75715E"
+        monokai_accent = "#66D9EF"
+        monokai_selected = "#49483E"
+
+        style = ttk.Style(self.root)
+        style.theme_use("default")
+
+        # Configure window background
+        self.root.configure(bg=monokai_bg)
+
+        # Treeview (table)
+        style.configure("Treeview",
+                        background=monokai_entry,
+                        fieldbackground=monokai_entry,
+                        foreground=monokai_fg,
+                        rowheight=25)
+        style.map("Treeview", background=[("selected", monokai_selected)])
+
+        # Buttons
+        style.configure("TButton",
+                        background=monokai_button_bg,
+                        foreground=monokai_fg,
+                        padding=6,
+                        borderwidth=1)
+        style.map("TButton",
+                  background=[("active", monokai_selected)])
+
+        # Frame & Labels
+        for widget in self.root.winfo_children():
+            if isinstance(widget, (tk.Frame, tk.LabelFrame)):
+                widget.configure(bg=monokai_bg)
+                for sub in widget.winfo_children():
+                    if isinstance(sub, tk.Label):
+                        sub.configure(bg=monokai_bg, fg=monokai_accent)
+                    elif isinstance(sub, tk.Entry):
+                        sub.configure(bg=monokai_entry, fg=monokai_fg, insertbackground=monokai_fg,
+                                      relief=tk.FLAT, highlightthickness=1, highlightbackground="#444")
+                    elif isinstance(sub, tk.Button):
+                        sub.configure(bg=monokai_button_bg, fg=monokai_fg, activebackground=monokai_selected)
+
 
 if __name__ == "__main__":
     root = tk.Tk()
